@@ -10,7 +10,7 @@ from unittest import mock
 
 from PIL import Image
 
-from app import camera, config, imaging, telegram, temperature
+from app import camera, config, imaging, telegram, telemetry
 from app import __main__ as entry
 
 
@@ -165,19 +165,32 @@ class CameraSourceTest(unittest.TestCase):
         )
 
 
-class TemperatureTest(unittest.TestCase):
+class TelemetryTest(unittest.TestCase):
     def _response(self, text: str) -> mock.Mock:
         response = mock.Mock(text=text)
         response.raise_for_status.return_value = None
         return response
 
     def test_openipc_json(self) -> None:
-        payload = '{"soc_temp":"38°C","timezone":"Asia/Krasnoyarsk"}'
+        payload = json.dumps(
+            {
+                "soc_temp": "38°C",
+                "daynight_value": "1024",
+                "uptime": "0d 9h 35m 11s",
+                "timezone": "Asia/Krasnoyarsk",
+            }
+        )
         with mock.patch.object(
-            temperature.SESSION, "get", return_value=self._response(payload)
+            telemetry.SESSION, "get", return_value=self._response(payload)
         ):
-            value = temperature.fetch_temperature("http://host/pulse.cgi", timeout=1)
-        self.assertEqual(value, "38 °C")
+            value = telemetry.fetch_telemetry("http://host/pulse.cgi", timeout=1)
+        self.assertEqual(value.temperature, "38 °C")
+        self.assertEqual(value.light, "1024")
+        self.assertEqual(value.uptime, "0d 9h 35m 11s")
+        self.assertEqual(
+            value.caption_parts(),
+            ["Soc: 38 °C", "Light: 1024", "Uptime: 0d 9h 35m 11s"],
+        )
 
     def test_prometheus_fallback(self) -> None:
         text = (
@@ -186,33 +199,34 @@ class TemperatureTest(unittest.TestCase):
             "node_hwmon_temp_celsius 38.5714\n"
         )
         with mock.patch.object(
-            temperature.SESSION, "get", return_value=self._response(text)
+            telemetry.SESSION, "get", return_value=self._response(text)
         ):
-            value = temperature.fetch_temperature("http://host/metrics", timeout=1)
-        self.assertEqual(value, "38.6 °C")
+            value = telemetry.fetch_telemetry("http://host/metrics", timeout=1)
+        self.assertEqual(value.temperature, "38.6 °C")
+        self.assertEqual(value.caption_parts(), ["Soc: 38.6 °C"])
 
     def test_negative_temperature(self) -> None:
         text = "node_hwmon_temp_celsius -5\n"
         with mock.patch.object(
-            temperature.SESSION, "get", return_value=self._response(text)
+            telemetry.SESSION, "get", return_value=self._response(text)
         ):
-            value = temperature.fetch_temperature("http://host/metrics", timeout=1)
-        self.assertEqual(value, "-5 °C")
+            value = telemetry.fetch_telemetry("http://host/metrics", timeout=1)
+        self.assertEqual(value.temperature, "-5 °C")
 
-    def test_request_error_returns_none(self) -> None:
-        error = temperature.requests.RequestException("boom")
-        with mock.patch.object(temperature.SESSION, "get", side_effect=error):
-            value = temperature.fetch_temperature("http://host/pulse.cgi", timeout=1)
-        self.assertIsNone(value)
+    def test_request_error_returns_empty(self) -> None:
+        error = telemetry.requests.RequestException("boom")
+        with mock.patch.object(telemetry.SESSION, "get", side_effect=error):
+            value = telemetry.fetch_telemetry("http://host/pulse.cgi", timeout=1)
+        self.assertEqual(value.caption_parts(), [])
 
-    def test_unknown_payload_returns_none(self) -> None:
+    def test_unknown_payload_returns_empty(self) -> None:
         with mock.patch.object(
-            temperature.SESSION, "get", return_value=self._response("<html></html>")
+            telemetry.SESSION, "get", return_value=self._response("<html></html>")
         ):
-            value = temperature.fetch_temperature("http://host/pulse.cgi", timeout=1)
-        self.assertIsNone(value)
+            value = telemetry.fetch_telemetry("http://host/pulse.cgi", timeout=1)
+        self.assertEqual(value.caption_parts(), [])
 
-    def test_capture_appends_temperature(self) -> None:
+    def test_capture_appends_telemetry(self) -> None:
         camera_config = config.Camera(
             name="camera_1",
             title="Entrance",
@@ -224,15 +238,22 @@ class TemperatureTest(unittest.TestCase):
         )
         now = datetime(2026, 11, 14, 12, 30)
         img = Image.new("RGB", (192, 108))
+        reading = telemetry.Telemetry(
+            temperature="38 °C", light="1024", uptime="0d 9h 35m 11s"
+        )
 
         with mock.patch.object(entry, "get_snapshot", return_value=img), mock.patch.object(
-            entry, "fetch_temperature", return_value="38 °C"
+            entry, "fetch_telemetry", return_value=reading
         ):
             item = entry.capture(camera_config, settings, now)
 
-        self.assertEqual(item.caption, "Entrance — 14.11.2026 12:30 · 38 °C")
+        self.assertEqual(
+            item.caption,
+            "Entrance — 14.11.2026 12:30\n"
+            "Soc: 38 °C · Light: 1024 · Uptime: 0d 9h 35m 11s",
+        )
 
-    def test_capture_without_temperature(self) -> None:
+    def test_capture_without_telemetry(self) -> None:
         camera_config = config.Camera(
             name="camera_1", title="Entrance", url="http://host/a.jpg"
         )
@@ -243,7 +264,7 @@ class TemperatureTest(unittest.TestCase):
         img = Image.new("RGB", (192, 108))
 
         with mock.patch.object(entry, "get_snapshot", return_value=img), mock.patch.object(
-            entry, "fetch_temperature"
+            entry, "fetch_telemetry"
         ) as fetch:
             item = entry.capture(camera_config, settings, now)
 

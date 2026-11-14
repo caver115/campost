@@ -18,7 +18,7 @@ from .telegram import (
     send_media_group,
     send_photo,
 )
-from .temperature import fetch_temperature
+from .telemetry import fetch_telemetry
 
 log = logging.getLogger("campost")
 
@@ -38,14 +38,16 @@ def capture(camera: Camera, config: Config, now: datetime) -> MediaItem:
         raise RuntimeError(f"JPEG is too large: {len(data)} bytes")
 
     filename = now.strftime(f"photo_{camera.name}_%Y-%m-%d_%H-%M-%S.jpg")
-    temperature = (
-        fetch_temperature(camera.temp_url, timeout=config.temp_timeout)
+    telemetry = (
+        fetch_telemetry(camera.temp_url, timeout=config.temp_timeout)
         if camera.temp_url
         else None
     )
     caption = f"{camera.title} — {now:%d.%m.%Y %H:%M}"
-    if temperature:
-        caption = f"{caption} · {temperature}"
+    if telemetry is not None:
+        parts = telemetry.caption_parts()
+        if parts:
+            caption = f"{caption}\n{' · '.join(parts)}"
     return MediaItem(filename=filename, caption=caption, data=data)
 
 

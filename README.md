@@ -11,7 +11,7 @@ album.
 | `app/config.py` | env variables and `urls.txt` parsing |
 | `app/camera.py` | snapshot download with retries |
 | `app/imaging.py` | 16:9 crop/pad and JPEG encoding |
-| `app/temperature.py` | optional camera temperature for captions |
+| `app/telemetry.py` | optional temperature/light/uptime for captions |
 | `app/telegram.py` | `sendPhoto`, `sendMediaGroup`, failure notifications |
 | `urls.example.txt` | camera list template |
 | `urls.txt` | local camera list (gitignored, created from the template) |
@@ -43,19 +43,32 @@ included in the Docker image.
 File names and `name` values are derived from the line order (`camera_1`,
 `camera_2`, ...), captions use the text before `|` or `Camera N`.
 
-An optional third field adds the camera temperature to the caption:
+An optional third field adds camera telemetry to the caption:
 
 ```text
 Yard | rtsp://user:password@192.168.1.11:554/stream1 | http://192.168.1.11/cgi-bin/j/pulse.cgi
 ```
 
-The URL must return either JSON containing `soc_temp` (OpenIPC, e.g.
-`/cgi-bin/j/pulse.cgi`) or Prometheus text with a `node_hwmon_temp_celsius`
-metric (e.g. `/metrics`). The caption becomes
-`Yard — 14.11.2026 12:30 · 38 °C`. A failing temperature endpoint is logged
-and ignored; it never blocks the photo. Timeout: `BOTPOST_TEMP_TIMEOUT`
-(default 5 s). Note that Telegram shows only the first caption in an album,
-so put the camera with temperature first.
+The URL must return either JSON (OpenIPC, e.g. `/cgi-bin/j/pulse.cgi`) or
+Prometheus text (e.g. `/metrics`):
+
+| Field | JSON key | Prometheus metric |
+| --- | --- | --- |
+| SoC temperature | `soc_temp` | `node_hwmon_temp_celsius` |
+| Light sensor | `daynight_value` | — |
+| Uptime | `uptime` | — |
+
+The caption becomes:
+
+```text
+Yard — 14.11.2026 12:30
+Soc: 38 °C · Light: 1024 · Uptime: 0d 9h 35m 11s
+```
+
+Missing fields are skipped. A failing endpoint is logged and ignored; it
+never blocks the photo. Timeout: `BOTPOST_TEMP_TIMEOUT` (default 5 s). Note
+that Telegram shows only the first caption in an album, so put the camera with
+telemetry first.
 
 ## Local run
 
