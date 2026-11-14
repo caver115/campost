@@ -272,6 +272,8 @@ class TelegramPayloadTest(unittest.TestCase):
             ["attach://file0", "attach://file1"],
         )
         self.assertEqual(set(kwargs["files"]), {"file0", "file1"})
+        self.assertEqual(media[0]["caption"], "Entrance")
+        self.assertNotIn("caption", media[1])
 
     def test_media_group_rejects_single_item(self) -> None:
         items = [telegram.MediaItem("one.jpg", "Entrance", b"a")]

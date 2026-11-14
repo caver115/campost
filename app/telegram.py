@@ -53,13 +53,15 @@ def send_media_group(
     files: dict[str, tuple[str, bytes, str]] = {}
     for index, item in enumerate(items):
         key = f"file{index}"
-        media.append(
-            {
-                "type": "photo",
-                "media": f"attach://{key}",
-                "caption": item.caption,
-            }
-        )
+        entry: dict[str, object] = {
+            "type": "photo",
+            "media": f"attach://{key}",
+        }
+        # Telegram treats per-item captions as separate photo captions and then
+        # hides the album caption in the channel; only the first item may carry it.
+        if index == 0:
+            entry["caption"] = item.caption
+        media.append(entry)
         files[key] = (item.filename, item.data, "image/jpeg")
 
     data = {"chat_id": chat_id, "media": json.dumps(media)}
