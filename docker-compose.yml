@@ -1,0 +1,16 @@
+name: campost
+
+services:
+  campost:
+    build:
+      context: .
+      dockerfile: image/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - ./urls.txt:/app/urls.txt:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

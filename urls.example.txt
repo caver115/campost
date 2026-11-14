@@ -1,0 +1,11 @@
+# Camera list for campost. Copy to urls.txt and fill in real addresses.
+#
+# One camera per line:
+#   http://host/image.jpg
+# or with a custom caption:
+#   Entrance | http://host/image.jpg
+#
+# Empty lines and lines starting with '#' are ignored.
+
+Entrance | http://192.168.1.10/image.jpg
+Yard | http://192.168.1.11/webcapture.jpg?command=snap&channel=1

@@ -1,0 +1,7 @@
+# Build context is the project root (..), keep the image small.
+*
+!requirements.txt
+!app/
+!image/docker-entrypoint.sh
+**/__pycache__/
+*.pyc
