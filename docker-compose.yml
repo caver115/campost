@@ -3,6 +3,8 @@ name: campost
 services:
   campost:
     container_name: campost
+    # Cameras are reached over a ZeroTier route on the host; bridge NAT breaks it.
+    network_mode: host
     build:
       context: .
       dockerfile: image/Dockerfile
