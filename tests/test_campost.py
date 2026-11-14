@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
 from PIL import Image
 
-from app import camera, config, imaging, telegram
+from app import camera, config, imaging, telegram, temperature
+from app import __main__ as entry
 
 
 class ImagingTest(unittest.TestCase):
@@ -77,6 +79,29 @@ class CameraListTest(unittest.TestCase):
         cameras = config.load_cameras(path)
         self.assertEqual(cameras[0].url, "rtsp://user:pass@host:554/stream1")
 
+    def test_temperature_url_parsed(self) -> None:
+        path = self._write(
+            "Yard | rtsp://host:554/stream1 | http://host/cgi-bin/j/pulse.cgi\n"
+        )
+        cameras = config.load_cameras(path)
+        self.assertEqual(cameras[0].temp_url, "http://host/cgi-bin/j/pulse.cgi")
+
+    def test_temperature_url_optional(self) -> None:
+        path = self._write("Yard | rtsp://host:554/stream1\n")
+        cameras = config.load_cameras(path)
+        self.assertIsNone(cameras[0].temp_url)
+
+    def test_invalid_temperature_url_rejected(self) -> None:
+        path = self._write("Yard | http://host/a.jpg | rtsp://host/pulse\n")
+        with self.assertRaises(config.ConfigError) as ctx:
+            config.load_cameras(path)
+        self.assertIn(":1:", str(ctx.exception))
+
+    def test_too_many_separators_rejected(self) -> None:
+        path = self._write("A | http://host/a.jpg | http://host/t | extra\n")
+        with self.assertRaises(config.ConfigError):
+            config.load_cameras(path)
+
 
 class CameraSourceTest(unittest.TestCase):
     def _png_bytes(self) -> bytes:
@@ -138,6 +163,92 @@ class CameraSourceTest(unittest.TestCase):
             camera.safe_url("rtsp://host:554/user=admin&password=secret&channel=1"),
             "rtsp://host:554/user=admin&password=***&channel=1",
         )
+
+
+class TemperatureTest(unittest.TestCase):
+    def _response(self, text: str) -> mock.Mock:
+        response = mock.Mock(text=text)
+        response.raise_for_status.return_value = None
+        return response
+
+    def test_openipc_json(self) -> None:
+        payload = '{"soc_temp":"38°C","timezone":"Asia/Krasnoyarsk"}'
+        with mock.patch.object(
+            temperature.SESSION, "get", return_value=self._response(payload)
+        ):
+            value = temperature.fetch_temperature("http://host/pulse.cgi", timeout=1)
+        self.assertEqual(value, "38 °C")
+
+    def test_prometheus_fallback(self) -> None:
+        text = (
+            "# HELP node_hwmon_temp_celsius\n"
+            "# TYPE node_hwmon_temp_celsius gauge\n"
+            "node_hwmon_temp_celsius 38.5714\n"
+        )
+        with mock.patch.object(
+            temperature.SESSION, "get", return_value=self._response(text)
+        ):
+            value = temperature.fetch_temperature("http://host/metrics", timeout=1)
+        self.assertEqual(value, "38.6 °C")
+
+    def test_negative_temperature(self) -> None:
+        text = "node_hwmon_temp_celsius -5\n"
+        with mock.patch.object(
+            temperature.SESSION, "get", return_value=self._response(text)
+        ):
+            value = temperature.fetch_temperature("http://host/metrics", timeout=1)
+        self.assertEqual(value, "-5 °C")
+
+    def test_request_error_returns_none(self) -> None:
+        error = temperature.requests.RequestException("boom")
+        with mock.patch.object(temperature.SESSION, "get", side_effect=error):
+            value = temperature.fetch_temperature("http://host/pulse.cgi", timeout=1)
+        self.assertIsNone(value)
+
+    def test_unknown_payload_returns_none(self) -> None:
+        with mock.patch.object(
+            temperature.SESSION, "get", return_value=self._response("<html></html>")
+        ):
+            value = temperature.fetch_temperature("http://host/pulse.cgi", timeout=1)
+        self.assertIsNone(value)
+
+    def test_capture_appends_temperature(self) -> None:
+        camera_config = config.Camera(
+            name="camera_1",
+            title="Entrance",
+            url="http://host/a.jpg",
+            temp_url="http://host/pulse.cgi",
+        )
+        settings = config.Config(
+            bot_token="T", chat_id="-100", cameras=[camera_config]
+        )
+        now = datetime(2026, 11, 14, 12, 30)
+        img = Image.new("RGB", (192, 108))
+
+        with mock.patch.object(entry, "get_snapshot", return_value=img), mock.patch.object(
+            entry, "fetch_temperature", return_value="38 °C"
+        ):
+            item = entry.capture(camera_config, settings, now)
+
+        self.assertEqual(item.caption, "Entrance — 14.11.2026 12:30 · 38 °C")
+
+    def test_capture_without_temperature(self) -> None:
+        camera_config = config.Camera(
+            name="camera_1", title="Entrance", url="http://host/a.jpg"
+        )
+        settings = config.Config(
+            bot_token="T", chat_id="-100", cameras=[camera_config]
+        )
+        now = datetime(2026, 11, 14, 12, 30)
+        img = Image.new("RGB", (192, 108))
+
+        with mock.patch.object(entry, "get_snapshot", return_value=img), mock.patch.object(
+            entry, "fetch_temperature"
+        ) as fetch:
+            item = entry.capture(camera_config, settings, now)
+
+        fetch.assert_not_called()
+        self.assertEqual(item.caption, "Entrance — 14.11.2026 12:30")
 
 
 class TelegramPayloadTest(unittest.TestCase):

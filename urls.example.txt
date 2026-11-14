@@ -8,7 +8,12 @@
 #   Entrance | http://host/image.jpg
 #   Yard | rtsp://user:password@host:554/stream1
 #
+# An optional third field adds the camera temperature to the caption. It must
+# be an HTTP(S) endpoint returning either JSON with "soc_temp" (OpenIPC) or
+# Prometheus text with "node_hwmon_temp_celsius":
+#   Yard | rtsp://user:password@host:554/stream1 | http://host/cgi-bin/j/pulse.cgi
+#
 # Empty lines and lines starting with '#' are ignored.
 
 Entrance | http://192.168.1.10/image.jpg
-Yard | rtsp://user:password@192.168.1.11:554/stream1
+Yard | rtsp://user:password@192.168.1.11:554/stream1 | http://192.168.1.11/cgi-bin/j/pulse.cgi

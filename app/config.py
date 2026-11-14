@@ -16,6 +16,7 @@ class Camera:
     name: str
     title: str
     url: str
+    temp_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class Config:
     jpeg_quality: int = 95
     http_timeout: float = 20.0
     ffmpeg_timeout: float = 30.0
+    temp_timeout: float = 5.0
     notify_failures: bool = True
 
     @classmethod
@@ -38,6 +40,7 @@ class Config:
             jpeg_quality=int(os.getenv("BOTPOST_JPEG_QUALITY", "95")),
             http_timeout=float(os.getenv("BOTPOST_HTTP_TIMEOUT", "20")),
             ffmpeg_timeout=float(os.getenv("BOTPOST_FFMPEG_TIMEOUT", "30")),
+            temp_timeout=float(os.getenv("BOTPOST_TEMP_TIMEOUT", "5")),
             notify_failures=_env_bool("BOTPOST_NOTIFY_FAILURES", True),
         )
 
@@ -48,7 +51,10 @@ def load_cameras(path: Path) -> list[Camera]:
     Supported lines:
         http://host/image.jpg
         Entrance | http://host/image.jpg
-    Empty lines and lines starting with '#' are ignored.
+        102 | rtsp://host:554/stream | http://host/cgi-bin/j/pulse.cgi
+    The optional third field points to a JSON or Prometheus endpoint whose
+    temperature is appended to the caption. Empty lines and lines starting
+    with '#' are ignored.
     """
     try:
         content = path.read_text(encoding="utf-8")
@@ -61,13 +67,22 @@ def load_cameras(path: Path) -> list[Camera]:
         if not line or line.startswith("#"):
             continue
 
-        if "|" in line:
-            title, url = (part.strip() for part in line.split("|", 1))
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) > 3:
+            raise ConfigError(f"{path}:{lineno}: too many '|' separators")
+
+        if len(parts) == 1:
+            title, url, temp_url = "", parts[0], None
+        elif len(parts) == 2:
+            title, url = parts
+            temp_url = None
         else:
-            title, url = "", line
+            title, url, temp_url = parts
 
         if not url.startswith(("http://", "https://", "rtsp://", "rtsps://")):
             raise ConfigError(f"{path}:{lineno}: invalid URL: {url!r}")
+        if temp_url is not None and not temp_url.startswith(("http://", "https://")):
+            raise ConfigError(f"{path}:{lineno}: invalid temperature URL: {temp_url!r}")
 
         index = len(cameras) + 1
         cameras.append(
@@ -75,6 +90,7 @@ def load_cameras(path: Path) -> list[Camera]:
                 name=f"camera_{index}",
                 title=title or f"Camera {index}",
                 url=url,
+                temp_url=temp_url or None,
             )
         )
 

@@ -11,6 +11,7 @@ album.
 | `app/config.py` | env variables and `urls.txt` parsing |
 | `app/camera.py` | snapshot download with retries |
 | `app/imaging.py` | 16:9 crop/pad and JPEG encoding |
+| `app/temperature.py` | optional camera temperature for captions |
 | `app/telegram.py` | `sendPhoto`, `sendMediaGroup`, failure notifications |
 | `urls.example.txt` | camera list template |
 | `urls.txt` | local camera list (gitignored, created from the template) |
@@ -41,6 +42,20 @@ included in the Docker image.
 
 File names and `name` values are derived from the line order (`camera_1`,
 `camera_2`, ...), captions use the text before `|` or `Camera N`.
+
+An optional third field adds the camera temperature to the caption:
+
+```text
+Yard | rtsp://user:password@192.168.1.11:554/stream1 | http://192.168.1.11/cgi-bin/j/pulse.cgi
+```
+
+The URL must return either JSON containing `soc_temp` (OpenIPC, e.g.
+`/cgi-bin/j/pulse.cgi`) or Prometheus text with a `node_hwmon_temp_celsius`
+metric (e.g. `/metrics`). The caption becomes
+`Yard — 14.11.2026 12:30 · 38 °C`. A failing temperature endpoint is logged
+and ignored; it never blocks the photo. Timeout: `BOTPOST_TEMP_TIMEOUT`
+(default 5 s). Note that Telegram shows only the first caption in an album,
+so put the camera with temperature first.
 
 ## Local run
 
