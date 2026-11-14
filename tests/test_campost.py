@@ -9,7 +9,7 @@ from unittest import mock
 
 from PIL import Image
 
-from app import config, imaging, telegram
+from app import camera, config, imaging, telegram
 
 
 class ImagingTest(unittest.TestCase):
@@ -71,6 +71,73 @@ class CameraListTest(unittest.TestCase):
         path = self._write("# only comments\n\n")
         with self.assertRaises(config.ConfigError):
             config.load_cameras(path)
+
+    def test_rtsp_url_accepted(self) -> None:
+        path = self._write("Yard | rtsp://user:pass@host:554/stream1\n")
+        cameras = config.load_cameras(path)
+        self.assertEqual(cameras[0].url, "rtsp://user:pass@host:554/stream1")
+
+
+class CameraSourceTest(unittest.TestCase):
+    def _png_bytes(self) -> bytes:
+        buffer = BytesIO()
+        Image.new("RGB", (64, 36), (1, 2, 3)).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def test_rtsp_uses_ffmpeg(self) -> None:
+        result = mock.Mock(returncode=0, stdout=self._png_bytes(), stderr=b"")
+        with mock.patch.object(camera.subprocess, "run", return_value=result) as run:
+            img = camera.get_snapshot("rtsp://host:554/stream", retries=1)
+
+        self.assertEqual(img.size, (64, 36))
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], "ffmpeg")
+        self.assertIn("-rtsp_transport", command)
+
+    def test_http_does_not_call_ffmpeg(self) -> None:
+        response = mock.Mock(content=self._png_bytes())
+        response.raise_for_status.return_value = None
+        with mock.patch.object(
+            camera.SESSION, "get", return_value=response
+        ), mock.patch.object(camera.subprocess, "run") as run:
+            camera.get_snapshot("http://host/a.jpg", retries=1)
+
+        run.assert_not_called()
+
+    def test_http_4xx_is_permanent(self) -> None:
+        response = mock.Mock(status_code=404)
+        error = camera.requests.HTTPError(response=response)
+        response.raise_for_status.side_effect = error
+        with mock.patch.object(
+            camera.SESSION, "get", return_value=response
+        ), mock.patch.object(camera.time, "sleep") as sleep:
+            with self.assertRaises(camera.PermanentCameraError):
+                camera.get_snapshot("http://host/missing.jpg", retries=3)
+
+        sleep.assert_not_called()
+
+    def test_rtsp_auth_error_is_permanent(self) -> None:
+        result = mock.Mock(returncode=1, stdout=b"", stderr=b"401 Unauthorized")
+        with mock.patch.object(
+            camera.subprocess, "run", return_value=result
+        ), mock.patch.object(camera.time, "sleep") as sleep:
+            with self.assertRaises(camera.PermanentCameraError):
+                camera.get_snapshot("rtsp://host/stream", retries=3)
+
+        sleep.assert_not_called()
+
+    def test_safe_url_masks_credentials(self) -> None:
+        self.assertEqual(
+            camera.safe_url("rtsp://user:pass@host:554/stream"),
+            "rtsp://***@host:554/stream",
+        )
+        self.assertEqual(
+            camera.safe_url("http://host/image.jpg"), "http://host/image.jpg"
+        )
+        self.assertEqual(
+            camera.safe_url("rtsp://host:554/user=admin&password=secret&channel=1"),
+            "rtsp://host:554/user=admin&password=***&channel=1",
+        )
 
 
 class TelegramPayloadTest(unittest.TestCase):

@@ -25,6 +25,7 @@ class Config:
     cameras: list[Camera]
     jpeg_quality: int = 95
     http_timeout: float = 20.0
+    ffmpeg_timeout: float = 30.0
     notify_failures: bool = True
 
     @classmethod
@@ -36,6 +37,7 @@ class Config:
             cameras=load_cameras(path),
             jpeg_quality=int(os.getenv("BOTPOST_JPEG_QUALITY", "95")),
             http_timeout=float(os.getenv("BOTPOST_HTTP_TIMEOUT", "20")),
+            ffmpeg_timeout=float(os.getenv("BOTPOST_FFMPEG_TIMEOUT", "30")),
             notify_failures=_env_bool("BOTPOST_NOTIFY_FAILURES", True),
         )
 
@@ -64,7 +66,7 @@ def load_cameras(path: Path) -> list[Camera]:
         else:
             title, url = "", line
 
-        if not url.startswith(("http://", "https://")):
+        if not url.startswith(("http://", "https://", "rtsp://", "rtsps://")):
             raise ConfigError(f"{path}:{lineno}: invalid URL: {url!r}")
 
         index = len(cameras) + 1

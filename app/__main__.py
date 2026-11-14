@@ -25,7 +25,11 @@ MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 
 def capture(camera: Camera, config: Config, now: datetime) -> MediaItem:
-    img = get_snapshot(camera.url, timeout=config.http_timeout)
+    img = get_snapshot(
+        camera.url,
+        timeout=config.http_timeout,
+        ffmpeg_timeout=config.ffmpeg_timeout,
+    )
     img = fit_to_16_9(img)
     data = to_jpeg_bytes(img, quality=config.jpeg_quality)
 

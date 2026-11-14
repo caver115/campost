@@ -1,11 +1,14 @@
 # Camera list for campost. Copy to urls.txt and fill in real addresses.
 #
-# One camera per line:
+# One camera per line. HTTP(S) URLs are fetched directly, RTSP URLs are
+# grabbed with ffmpeg (main stream is usually higher resolution):
 #   http://host/image.jpg
+#   rtsp://user:password@host:554/stream1
 # or with a custom caption:
 #   Entrance | http://host/image.jpg
+#   Yard | rtsp://user:password@host:554/stream1
 #
 # Empty lines and lines starting with '#' are ignored.
 
 Entrance | http://192.168.1.10/image.jpg
-Yard | http://192.168.1.11/webcapture.jpg?command=snap&channel=1
+Yard | rtsp://user:password@192.168.1.11:554/stream1

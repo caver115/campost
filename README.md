@@ -30,8 +30,14 @@ One camera per line. An optional caption can be given before a `|`:
 
 ```text
 Entrance | http://192.168.1.10/image.jpg
-http://192.168.1.11/webcapture.jpg?command=snap&channel=1
+Yard | rtsp://user:password@192.168.1.11:554/stream1
+http://192.168.1.12/webcapture.jpg?command=snap&channel=1
 ```
+
+HTTP(S) URLs are downloaded directly. RTSP URLs are grabbed with `ffmpeg`
+(one frame over TCP), which usually yields the main stream instead of the
+low-resolution HTTP snapshot; `ffmpeg` must be installed locally and is already
+included in the Docker image.
 
 File names and `name` values are derived from the line order (`camera_1`,
 `camera_2`, ...), captions use the text before `|` or `Camera N`.
@@ -79,7 +85,9 @@ python -m unittest discover -s tests -v
 ## Behaviour notes
 
 - Both cameras are fetched independently; a failing camera does not block the
-  other one.
+  other one. HTTP(S) sources are downloaded directly, RTSP sources are captured
+  with `ffmpeg -rtsp_transport tcp -frames:v 1`.
+- Credentials in URLs are masked in logs.
 - Two or more photos are sent as one album via `sendMediaGroup`. If only one
   camera responds, the photo is sent with `sendPhoto`.
 - If Telegram rejects the album, the photos are sent separately.
