@@ -37,7 +37,7 @@ class Telemetry:
     def caption_parts(self) -> list[str]:
         parts: list[str] = []
         if self.temperature:
-            parts.append(f"Soc: {self.temperature}")
+            parts.append(f"SoC: {self.temperature}")
         if self.light:
             parts.append(f"Light: {self.light}")
         if self.uptime:

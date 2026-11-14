@@ -61,8 +61,8 @@ Prometheus text (e.g. `/metrics`):
 The caption becomes:
 
 ```text
-Yard — 14.11.2026 12:30
-Soc: 38 °C · Light: 1024 · Uptime: 0d 9h 35m 11s
+Yard — 14.11.2026 12:30 +07:00
+SoC: 38 °C · Light: 1024 · Uptime: 0d 9h 35m 11s
 ```
 
 Missing fields are skipped. A failing endpoint is logged and ignored; it

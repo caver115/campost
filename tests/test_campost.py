@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
@@ -189,7 +189,7 @@ class TelemetryTest(unittest.TestCase):
         self.assertEqual(value.uptime, "0d 9h 35m 11s")
         self.assertEqual(
             value.caption_parts(),
-            ["Soc: 38 °C", "Light: 1024", "Uptime: 0d 9h 35m 11s"],
+            ["SoC: 38 °C", "Light: 1024", "Uptime: 0d 9h 35m 11s"],
         )
 
     def test_prometheus_fallback(self) -> None:
@@ -203,7 +203,7 @@ class TelemetryTest(unittest.TestCase):
         ):
             value = telemetry.fetch_telemetry("http://host/metrics", timeout=1)
         self.assertEqual(value.temperature, "38.6 °C")
-        self.assertEqual(value.caption_parts(), ["Soc: 38.6 °C"])
+        self.assertEqual(value.caption_parts(), ["SoC: 38.6 °C"])
 
     def test_negative_temperature(self) -> None:
         text = "node_hwmon_temp_celsius -5\n"
@@ -236,7 +236,7 @@ class TelemetryTest(unittest.TestCase):
         settings = config.Config(
             bot_token="T", chat_id="-100", cameras=[camera_config]
         )
-        now = datetime(2026, 11, 14, 12, 30)
+        now = datetime(2026, 11, 14, 12, 30, tzinfo=timezone(timedelta(hours=7)))
         img = Image.new("RGB", (192, 108))
         reading = telemetry.Telemetry(
             temperature="38 °C", light="1024", uptime="0d 9h 35m 11s"
@@ -249,8 +249,8 @@ class TelemetryTest(unittest.TestCase):
 
         self.assertEqual(
             item.caption,
-            "Entrance — 14.11.2026 12:30\n"
-            "Soc: 38 °C · Light: 1024 · Uptime: 0d 9h 35m 11s",
+            "Entrance — 14.11.2026 12:30 +07:00\n"
+            "SoC: 38 °C · Light: 1024 · Uptime: 0d 9h 35m 11s",
         )
 
     def test_capture_without_telemetry(self) -> None:
@@ -260,7 +260,7 @@ class TelemetryTest(unittest.TestCase):
         settings = config.Config(
             bot_token="T", chat_id="-100", cameras=[camera_config]
         )
-        now = datetime(2026, 11, 14, 12, 30)
+        now = datetime(2026, 11, 14, 12, 30, tzinfo=timezone(timedelta(hours=7)))
         img = Image.new("RGB", (192, 108))
 
         with mock.patch.object(entry, "get_snapshot", return_value=img), mock.patch.object(
@@ -269,7 +269,7 @@ class TelemetryTest(unittest.TestCase):
             item = entry.capture(camera_config, settings, now)
 
         fetch.assert_not_called()
-        self.assertEqual(item.caption, "Entrance — 14.11.2026 12:30")
+        self.assertEqual(item.caption, "Entrance — 14.11.2026 12:30 +07:00")
 
 
 class TelegramPayloadTest(unittest.TestCase):

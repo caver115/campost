@@ -43,12 +43,20 @@ def capture(camera: Camera, config: Config, now: datetime) -> MediaItem:
         if camera.temp_url
         else None
     )
-    caption = f"{camera.title} — {now:%d.%m.%Y %H:%M}"
+    caption = f"{camera.title} — {_format_time(now)}"
     if telemetry is not None:
         parts = telemetry.caption_parts()
         if parts:
             caption = f"{caption}\n{' · '.join(parts)}"
     return MediaItem(filename=filename, caption=caption, data=data)
+
+
+def _format_time(now: datetime) -> str:
+    text = now.strftime("%d.%m.%Y %H:%M")
+    offset = now.strftime("%z")
+    if offset:
+        text = f"{text} {offset[:3]}:{offset[3:]}"
+    return text
 
 
 def run_once(
@@ -58,7 +66,7 @@ def run_once(
     out_dir: Path | None = None,
     now: datetime | None = None,
 ) -> int:
-    now = now or datetime.now()
+    now = now or datetime.now().astimezone()
     items: list[MediaItem] = []
     failed: list[Camera] = []
 
