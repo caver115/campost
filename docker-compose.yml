@@ -2,6 +2,7 @@ name: campost
 
 services:
   campost:
+    container_name: campost
     build:
       context: .
       dockerfile: image/Dockerfile
