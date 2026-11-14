@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # Allow one-off commands: docker compose run --rm campost python -m app --dry-run
 if [ "$#" -gt 0 ]; then
